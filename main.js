@@ -70,6 +70,7 @@ var mockFileLibrary =
 		}
 	}
 
+
 };
 
 function generateTestCases()
@@ -99,7 +100,8 @@ function generateTestCases()
 		console.log(constraints);
 
 		// Handle global constraints...
-		var fileWithContent = _.some(constraints, {kind: 'fileWithContent' });
+		var fileWithContent = _.some(constraints, {kind: 'fileWithContent' });	
+		var fileWithoutContent = _.some(constraints, {kind: 'fileWithoutContent' });
 		var pathExists      = _.some(constraints, {kind: 'fileExists' });
 
 		// plug-in values for parameters
@@ -196,24 +198,43 @@ function generateMockFsTestCases (pathExists,fileWithContent,funcName,args)
 {
 	var testCase = "";
 	// Build mock file system based on constraints.
-	var mergedFS = {};
-	if( pathExists )
+	
+	for(var i = 0; i < 30; i++)
 	{
-		for (var attrname in mockFileLibrary.pathExists) { mergedFS[attrname] = mockFileLibrary.pathExists[attrname]; }
+		var mergedFS = {};
+		if(Random.bool(0.5)(engine))
+		{
+			mockFileLibrary['pathExists']['path/fileExists'] = {}
+		}
+		else
+		{
+			mockFileLibrary['pathExists']['path/fileExists'] = {file1: ''}	
+		}
+		if(Random.bool(0.5)(engine))
+		{
+			mockFileLibrary['fileWithContent']['pathContent'] = {file1: 'text content'}
+		}
+		else
+		{
+			mockFileLibrary['fileWithContent']['pathContent'] = {file1: ''}
+		}
+		if( pathExists )
+		{
+			for (var attrname in mockFileLibrary.pathExists) { mergedFS[attrname] = mockFileLibrary.pathExists[attrname]; }
+		}
+	    if( fileWithContent )
+	    {
+	    	for (var attrname in mockFileLibrary.fileWithContent) { mergedFS[attrname] = mockFileLibrary.fileWithContent[attrname]; }
+	    }
+	    testCase += 
+	    "mock(" +
+		     JSON.stringify(mergedFS)
+		    +
+	    ");\n";
+	    testCase += "\tsubject.{0}({1});\n".format(funcName, args );
+	     testCase+="mock.restore();\n";
 	}
-	if( fileWithContent )
-	{
-		for (var attrname in mockFileLibrary.fileWithContent) { mergedFS[attrname] = mockFileLibrary.fileWithContent[attrname]; }
-	}
-
-	testCase += 
-	"mock(" +
-		JSON.stringify(mergedFS)
-		+
-	");\n";
-
-	testCase += "\tsubject.{0}({1});\n".format(funcName, args );
-	testCase+="mock.restore();\n";
+	
 	return testCase;
 }
 
