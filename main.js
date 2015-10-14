@@ -19,7 +19,7 @@ function main()
 
 	constraints(filePath);
 
-	generateTestCases()
+	generateTestCases(filePath);
 
 }
 
@@ -73,10 +73,10 @@ var mockFileLibrary =
 
 };
 
-function generateTestCases()
+function generateTestCases(filePath)
 {
 
-	var content = "var subject = require('./subject.js')\nvar mock = require('mock-fs');\n";
+	var content = "var subject = require('./"+filePath+"')\nvar mock = require('mock-fs');\n";
 	for ( var funcName in functionConstraints )
 	{
 		console.log('---------------------------function-------------------------------');
@@ -198,34 +198,30 @@ function generateMockFsTestCases (pathExists,fileWithContent,funcName,args)
 {
 	var testCase = "";
 	// Build mock file system based on constraints.
-	
-	for(var i = 0; i < 30; i++)
-	{
-		var mergedFS = {};
-		if(Random.bool(0.5)(engine))
+	var mergedFS = {};
+	if(Random.bool(0.5)(engine))
 		{
 			mockFileLibrary['pathExists']['path/fileExists'] = {}
 		}
-		else
-		{
-			mockFileLibrary['pathExists']['path/fileExists'] = {file1: ''}	
+	else{
+		    mockFileLibrary['pathExists']['path/fileExists'] = {file1: ''}	
 		}
-		if(Random.bool(0.5)(engine))
-		{
-			mockFileLibrary['fileWithContent']['pathContent'] = {file1: 'text content'}
-		}
-		else
-		{
-			mockFileLibrary['fileWithContent']['pathContent'] = {file1: ''}
-		}
-		if( pathExists )
-		{
-			for (var attrname in mockFileLibrary.pathExists) { mergedFS[attrname] = mockFileLibrary.pathExists[attrname]; }
-		}
-	    if( fileWithContent )
-	    {
-	    	for (var attrname in mockFileLibrary.fileWithContent) { mergedFS[attrname] = mockFileLibrary.fileWithContent[attrname]; }
-	    }
+	if(Random.bool(0.5)(engine))
+	{
+		mockFileLibrary['fileWithContent']['pathContent'] = {file1: 'text content'}
+	}
+	else
+	{
+		mockFileLibrary['fileWithContent']['pathContent'] = {file1: ''}
+	}
+	if( pathExists )
+	{
+		for (var attrname in mockFileLibrary.pathExists) { mergedFS[attrname] = mockFileLibrary.pathExists[attrname]; }
+	}
+	if( fileWithContent )
+	{
+		for (var attrname in mockFileLibrary.fileWithContent) { mergedFS[attrname] = mockFileLibrary.fileWithContent[attrname]; }
+	}
 	    testCase += 
 	    "mock(" +
 		     JSON.stringify(mergedFS)
@@ -233,8 +229,6 @@ function generateMockFsTestCases (pathExists,fileWithContent,funcName,args)
 	    ");\n";
 	    testCase += "\tsubject.{0}({1});\n".format(funcName, args );
 	     testCase+="mock.restore();\n";
-	}
-	
 	return testCase;
 }
 
