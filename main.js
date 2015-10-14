@@ -69,6 +69,7 @@ var mockFileLibrary =
   			file1: 'text content',
 		}
 	}
+
 };
 
 function generateTestCases()
@@ -77,6 +78,9 @@ function generateTestCases()
 	var content = "var subject = require('./subject.js')\nvar mock = require('mock-fs');\n";
 	for ( var funcName in functionConstraints )
 	{
+		console.log('---------------------------function-------------------------------');
+		console.log(funcName);
+
 		var params = {};
 
 		// initialize params
@@ -91,6 +95,9 @@ function generateTestCases()
 
 		// update parameter values based on known constraints.
 		var constraints = functionConstraints[funcName].constraints;
+		console.log('--------------constraints--------------');
+		console.log(constraints);
+
 		// Handle global constraints...
 		var fileWithContent = _.some(constraints, {kind: 'fileWithContent' });
 		var pathExists      = _.some(constraints, {kind: 'fileExists' });
@@ -99,6 +106,7 @@ function generateTestCases()
 		for( var c = 0; c < constraints.length; c++ )
 		{
 			var constraint = constraints[c];
+			
 			if( params.hasOwnProperty( constraint.ident ) )
 			{
 				params[constraint.ident] = constraint.value;
@@ -107,6 +115,61 @@ function generateTestCases()
 
 		// Prepare function arguments.
 		var args = Object.keys(params).map( function(k) {return params[k]; }).join(",");
+		console.log('--------------args--------------');
+		console.log(args);
+		
+
+		variables = new Object();
+		for ( var funcName in functionConstraints )
+		{
+			var params = {};
+			variables[funcName] = new Array( functionConstraints[funcName].params.length );
+			for (var i =0; i < functionConstraints[funcName].params.length; i++ )
+			{
+				var paramName = functionConstraints[funcName].params[i];
+				params[paramName] = '\'\'';
+		}
+		var constraints = functionConstraints[funcName].constraints;
+		for( var c = 0; c < constraints.length; c++ )
+		{
+			var constraint = constraints[c];
+			index = functionConstraints[funcName].params.indexOf(constraint.ident);
+			if( typeof variables[funcName][index] == "undefined" ) variables[funcName][index] = [];
+			if( typeof constraint.ident !== "undefined" )
+			{
+				variables[funcName][index].push( constraint.value );
+				if( typeof constraint.inverse != "undefined" )
+				{
+					variables[funcName][index].push( constraint.inverse );
+				}
+			}
+		}
+
+		var len = 1;
+		for( var i = 0; i < functionConstraints[funcName].params.length; i++ )
+		{
+			if( typeof variables[funcName][i] == "undefined" ) variables[funcName][i] = [ "\'\'" ];
+			else len *= variables[funcName][i].length;
+		}
+
+		for( var i = 0; i < len; i++ )
+		{
+			var params_list = [];
+			var x = i;
+			for( var j = 0; j < functionConstraints[funcName].params.length; j ++ )
+			{
+				params_list[j] = variables[funcName][j][x % variables[funcName][j].length];
+				x = Math.floor( x / variables[funcName][j].length );
+			}
+
+			var args = params_list.join(",");
+			content += "subject.{0}({1});\n".format(funcName, args );
+		}
+
+	}
+	//console.log(variables);
+
+
 		if( pathExists || fileWithContent )
 		{
 			content += generateMockFsTestCases(pathExists,fileWithContent,funcName, args);
@@ -122,6 +185,7 @@ function generateTestCases()
 		}
 
 	}
+	
 
 
 	fs.writeFileSync('test.js', content, "utf8");
@@ -172,7 +236,131 @@ function constraints(filePath)
 			// Check for expressions using argument.
 			traverse(node, function(child)
 			{
-				if( child.type === 'BinaryExpression' && child.operator == "==")
+				if( child.type === 'BinaryExpression' && child.operator == "==" )
+				{
+					if( child.left.type == 'Identifier' && params.indexOf( child.left.name ) >= 0)
+					{
+						var expression = buf.substring(child.range[0], child.range[1]);
+						var rightHand = buf.substring(child.right.range[0], child.right.range[1])
+						if(typeof(rightHand) == 'string')
+						{
+							if (rightHand !='undefined')
+							{
+								mutatedRightHand =  [rightHand.slice(0,1), "not", rightHand.slice(1)].join('');
+								functionConstraints[funcName].constraints.push( 
+									new Constraint(
+							{
+								ident: child.left.name,
+								value: mutatedRightHand,
+								funcName: funcName,
+								kind: 'string',
+								operator : child.operator,
+								expression: expression
+							}));
+							}
+							functionConstraints[funcName].constraints.push( 
+							new Constraint(
+							{
+								ident: child.left.name,
+								value: rightHand,
+								funcName: funcName,
+								kind: "string",
+								operator : child.operator,
+								expression: expression
+							}));
+						}
+						else
+						{
+							functionConstraints[funcName].constraints.push( 
+							new Constraint(
+							{
+								ident: child.left.name,
+								value: parseInt(rightHand) + 7,
+								funcName: funcName,
+								kind: "integer",
+								operator : child.operator,
+								expression: expression
+							}));
+							functionConstraints[funcName].constraints.push( 
+							new Constraint(
+							{
+								ident: child.left.name,
+								value: parseInt(rightHand),
+								funcName: funcName,
+								kind: "integer",
+								operator : child.operator,
+								expression: expression
+							}));
+
+						}
+
+					}
+				}
+
+				if( child.type === 'BinaryExpression' && child.operator == '!=' )
+				{
+					if( child.left.type == 'Identifier' && params.indexOf( child.left.name ) >= 0)
+					{
+						// get expression from original source code:
+						// console.log("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+						var expression = buf.substring(child.range[0], child.range[1]);
+						// console.log("EXPRESSION=>"+expression);
+						var rightHand = buf.substring(child.right.range[0], child.right.range[1])
+						if(typeof(rightHand) == 'string')
+						{
+							functionConstraints[funcName].constraints.push( 
+							new Constraint(
+							{
+								ident: child.left.name,
+								value: rightHand,
+								funcName: funcName,
+								kind: 'string',
+								operator : child.operator,
+								expression: expression
+							}));
+							if (rightHand!='undefined')
+							{
+								mutatedRightHand =  [rightHand.slice(0,1), "not", rightHand.slice(1)].join('');
+							functionConstraints[funcName].constraints.push( 
+							new Constraint(
+							{
+								ident: child.left.name,
+								value: mutatedRightHand,
+								funcName: funcName,
+								kind: 'string',
+								operator : child.operator,
+								expression: expression
+							}));
+							}
+							
+						}
+						else
+						{
+							functionConstraints[funcName].constraints.push( 
+							new Constraint(
+							{
+								ident: child.left.name,
+								value: parseInt(rightHand),
+								funcName: funcName,
+								kind: "integer",
+								operator : child.operator,
+								expression: expression
+							}));
+							functionConstraints[funcName].constraints.push( 
+							new Constraint(
+							{
+								ident: child.left.name,
+								value: parseInt(rightHand)+7,
+								funcName: funcName,
+								kind: "integer",
+								operator : child.operator,
+								expression: expression
+							}));
+						}
+					}
+				}
+				
+				if( child.type === 'BinaryExpression' && child.operator == "<")
 				{
 					if( child.left.type == 'Identifier' && params.indexOf( child.left.name ) > -1)
 					{
@@ -184,7 +372,7 @@ function constraints(filePath)
 							new Constraint(
 							{
 								ident: child.left.name,
-								value: rightHand,
+								value: parseInt(rightHand) + 7,
 								funcName: funcName,
 								kind: "integer",
 								operator : child.operator,
@@ -192,6 +380,140 @@ function constraints(filePath)
 							}));
 					}
 				}
+				if( child.type === 'BinaryExpression' && child.operator == "<")
+				{
+					if( child.left.type == 'Identifier' && params.indexOf( child.left.name ) > -1)
+					{
+						// get expression from original source code:
+						var expression = buf.substring(child.range[0], child.range[1]);
+						var rightHand = buf.substring(child.right.range[0], child.right.range[1])
+
+						functionConstraints[funcName].constraints.push( 
+							new Constraint(
+							{
+								ident: child.left.name,
+								value: parseInt(rightHand) - 7,
+								funcName: funcName,
+								kind: "integer",
+								operator : child.operator,
+								expression: expression
+							}));
+					}
+				}
+
+
+				if( child.type === 'BinaryExpression' && child.operator == ">")
+				{
+					if( child.left.type == 'Identifier' && params.indexOf( child.left.name ) > -1)
+					{
+						// get expression from original source code:
+						var expression = buf.substring(child.range[0], child.range[1]);
+						var rightHand = buf.substring(child.right.range[0], child.right.range[1])
+
+						functionConstraints[funcName].constraints.push( 
+							new Constraint(
+							{
+								ident: child.left.name,
+								value: parseInt(rightHand) + 7,
+								funcName: funcName,
+								kind: "integer",
+								operator : child.operator,
+								expression: expression
+							}));
+					}
+				}
+				if( child.type === 'BinaryExpression' && child.operator == ">")
+				{
+					if( child.left.type == 'Identifier' && params.indexOf( child.left.name ) > -1)
+					{
+						// get expression from original source code:
+						var expression = buf.substring(child.range[0], child.range[1]);
+						var rightHand = buf.substring(child.right.range[0], child.right.range[1])
+
+						functionConstraints[funcName].constraints.push( 
+							new Constraint(
+							{
+								ident: child.left.name,
+								value: parseInt(rightHand) - 7,
+								funcName: funcName,
+								kind: "integer",
+								operator : child.operator,
+								expression: expression
+							}));
+					}
+				}
+
+
+				if( child.type === 'BinaryExpression' && child.left.type == 'CallExpression' && child.left.callee.property.name == 'indexOf')
+				{
+					var expression = buf.substring(child.range[0], child.range[1]);
+					argument = child.left.arguments[0].raw;	
+					idx = child.right.value;
+					functionConstraints[funcName].constraints.push( 
+						new Constraint(
+							{
+								ident: child.left.callee.object.name,
+								value: argument,
+								funcName: funcName,
+								kind: 'indexOf',
+								operator : child.operator,
+								expression: expression
+							}));
+				}
+
+				if( child.type === 'LogicalExpression' && child.operator == "||")
+					{	
+						if(child.left.type == 'UnaryExpression' && params.indexOf( child.left.argument.name ) >= 0)
+						{
+							var expression = buf.substring(child.range[0], child.range[1]);
+							var rightHand = buf.substring(child.right.range[0], child.right.range[1]);
+							functionConstraints[funcName].constraints.push( 
+							new Constraint({
+								ident: child.left.argument.name,
+								value: '{'+child.right.argument.property.name+":true}",
+								funcName: funcName,
+								kind: 'bool',
+								operator : child.operator,
+								expression: expression
+							}));
+							functionConstraints[funcName].constraints.push( 
+							new Constraint({
+								ident: child.left.argument.name,
+								value: '{'+child.right.argument.property.name+":false}",
+								funcName: funcName,
+								kind: 'bool',
+								operator : child.operator,
+								expression: expression
+							}));
+						}
+					}
+					if( child.type === 'LogicalExpression' && child.operator == "&&")
+					{	
+						if(child.left.type == 'UnaryExpression' && params.indexOf( child.left.argument.name ) >= 0)
+						{
+							var expression = buf.substring(child.range[0], child.range[1]);
+							var rightHand = buf.substring(child.right.range[0], child.right.range[1]);
+							functionConstraints[funcName].constraints.push( 
+							new Constraint({
+								ident: child.left.argument.name,
+								value: '{'+child.right.argument.property.name+":true}",
+								funcName: funcName,
+								kind: 'bool',
+								operator : child.operator,
+								expression: expression
+							}));
+							functionConstraints[funcName].constraints.push( 
+							new Constraint({
+								ident: child.left.argument.name,
+								value: '{'+child.right.argument.property.name+":false}",
+								funcName: funcName,
+								kind: 'bool',
+								operator : child.operator,
+								expression: expression
+							}));
+						}
+					}
+
 
 				if( child.type == "CallExpression" && 
 					 child.callee.property &&
